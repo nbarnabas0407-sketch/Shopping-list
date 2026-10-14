@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Bevásárlólista kategóriákkal, kipipálással, offline is működik.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bevásárlólista">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Bevásárlólista</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: egyetlen keskeny oszlop, felül cím és haladás, alatta beviteli sor, majd kategóriánként csoportosított tételek. */
+:root {
+  --bg: #f3f5f2;
+  --surface: #ffffff;
+  --fg: #1c231e;
+  --muted: #657067;
+  --line: #dde3dc;
+  --paprika: #c93a1d;
+  --paprika-ink: #ffffff;
+  --done: #2f7d4f;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a16;
+    --surface: #1d2520;
+    --fg: #eaf0ea;
+    --muted: #9aa69c;
+    --line: #2e3831;
+    --paprika: #ee6446;
+    --paprika-ink: #1a0d09;
+    --done: #62b988;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a16;
+  --surface: #1d2520;
+  --fg: #eaf0ea;
+  --muted: #9aa69c;
+  --line: #2e3831;
+  --paprika: #ee6446;
+  --paprika-ink: #1a0d09;
+  --done: #62b988;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+  padding-block: calc(24px + env(safe-area-inset-top, 0px)) calc(48px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-direction: column; gap: 10px; }
+.date { color: var(--muted); font-size: 14px; text-transform: capitalize; letter-spacing: 0.02em; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 2.4rem;
+  line-height: 1;
+  margin: 0;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 0; background: var(--done); border-radius: 99px; transition: width .3s ease; }
+.count { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+form.add {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row > * { min-width: 0; }
+input, select, button { font: inherit; color: inherit; }
+input[type="text"], input[type="number"], select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+  width: 100%;
+}
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--paprika);
+  outline-offset: 2px;
+}
+#name { flex: 1 1 100%; }
+#qty { flex: 0 0 76px; width: 76px; font-variant-numeric: tabular-nums; }
+#unit { flex: 1 1 90px; }
+#cat { flex: 2 1 150px; }
+.primary {
+  flex: 1 1 100%;
+  background: var(--paprika);
+  color: var(--paprika-ink);
+  border: 0;
+  border-radius: 10px;
+  min-height: 46px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.primary:active { transform: translateY(1px); }
+
+.hint {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  border: 1px dashed var(--line); border-radius: 12px; padding: 10px 12px;
+  font-size: 14px; color: var(--muted);
+}
+.link {
+  background: none; border: 0; padding: 8px 4px; min-height: 44px;
+  color: var(--paprika); font-weight: 600; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px; white-space: nowrap;
+}
+
+.group { display: flex; flex-direction: column; gap: 6px; }
+.group h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex; justify-content: space-between;
+}
+ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex; align-items: center; gap: 4px;
+  padding-right: 4px;
+}
+.check {
+  flex: 0 0 auto;
+  width: 48px; height: 52px;
+  background: none; border: 0; cursor: pointer;
+  display: grid; place-items: center;
+}
+.box {
+  width: 24px; height: 24px; border-radius: 8px;
+  border: 2px solid var(--muted);
+  display: grid; place-items: center;
+  transition: background .15s, border-color .15s;
+}
+.box svg { width: 14px; height: 14px; opacity: 0; stroke: var(--surface); }
+li.done .box { background: var(--done); border-color: var(--done); }
+li.done .box svg { opacity: 1; }
+.label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; padding: 8px 0; }
+.qty { color: var(--muted); font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+li.done .label { text-decoration: line-through; color: var(--muted); }
+li.done .qty { opacity: .7; }
+.del {
+  flex: 0 0 auto; width: 44px; height: 44px;
+  background: none; border: 0; border-radius: 10px; cursor: pointer; color: var(--muted);
+  display: grid; place-items: center;
+}
+.del:hover { color: var(--paprika); }
+.del svg { width: 18px; height: 18px; }
+
+.empty { text-align: center; color: var(--muted); padding: 32px 8px; border: 1px dashed var(--line); border-radius: 14px; }
+.foot { display: flex; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<style>
+:root { color-scheme: light; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="date" id="date"></div>
+    <h1>Bevásárlólista</h1>
+    <div class="progress" aria-live="polite">
+      <div class="bar"><span id="fill"></span></div>
+      <div class="count" id="count"></div>
+    </div>
+  </header>
+
+  <form class="add" id="form" autocomplete="off">
+    <div class="row">
+      <input type="text" id="name" placeholder="Mi kell? pl. kenyér, tejföl, csirkemell" aria-label="Tétel neve" maxlength="80">
+      <input type="number" id="qty" value="1" min="0.1" step="any" inputmode="decimal" aria-label="Mennyiség">
+      <select id="unit" aria-label="Mértékegység">
+        <option>db</option><option>kg</option><option>dkg</option><option>g</option>
+        <option>l</option><option>dl</option><option>csomag</option><option>üveg</option><option>doboz</option>
+      </select>
+      <select id="cat" aria-label="Kategória"></select>
+      <button class="primary" type="submit">Hozzáadás</button>
+    </div>
+  </form>
+
+  <div class="hint" id="hint" hidden>
+    <span>A lista minta tételekkel indult.</span>
+    <button class="link" id="clearSamples" type="button">Minták törlése</button>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="foot"><button class="link" id="clearDone" type="button" hidden>Megvettek törlése</button></div>
+</main>
+
+<script>
+(function () {
+  var CATS = [
+    ["zold", "Zöldség és gyümölcs"],
+    ["pek", "Pékáru"],
+    ["tej", "Tejtermék és tojás"],
+    ["hus", "Hús és felvágott"],
+    ["szaraz", "Száraz áru és konzerv"],
+    ["ital", "Italok"],
+    ["haz", "Háztartás és drogéria"],
+    ["egyeb", "Egyéb"]
+  ];
+  var KEYS = {
+    zold: ["paprika", "paradicsom", "uborka", "burgonya", "krumpli", "hagyma", "fokhagyma", "répa", "sárgarépa", "alma", "banán", "citrom", "narancs", "saláta", "káposzta", "gomba", "körte", "szőlő", "zöldség", "gyümölcs", "cukkini", "padlizsán", "spenót", "retek"],
+    pek: ["kenyér", "kifli", "zsemle", "péksütemény", "pogácsa", "lepény", "kalács", "bagett", "tekerccs", "sütemény"],
+    tej: ["tej", "tejföl", "túró", "sajt", "vaj", "joghurt", "kefir", "tojás", "tejszín", "margarin", "trappista", "mozzarella"],
+    hus: ["csirke", "sertés", "marha", "szalámi", "sonka", "kolbász", "virsli", "hús", "szárny", "comb", "darált", "bacon", "hal", "pulyka", "felvágott"],
+    szaraz: ["liszt", "cukor", "rizs", "tészta", "olaj", "só", "konzerv", "kukorica", "bab", "lencse", "müzli", "zabpehely", "csoki", "keksz", "méz", "lekvár", "fűszer", "ecet", "tészta"],
+    ital: ["víz", "ásványvíz", "sör", "bor", "üdítő", "kávé", "tea", "juice", "gyümölcslé", "cola", "szóda", "pálinka"],
+    haz: ["wc", "vécépapír", "papírtörlő", "mosópor", "mosogatószer", "szappan", "sampon", "fogkrém", "szemeteszsák", "szivacs", "tisztítószer", "öblítő", "zsebkendő", "tampon", "pelenka"]
+  };
+  var KEY = "bevasarlolista.v1";
+
+  var state = { items: [], seeded: false };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s && Array.isArray(s.items)) { state = s; return; }
+      }
+    } catch (e) {}
+    state = { seeded: true, items: [
+      { id: 1, name: "Tej", qty: 2, unit: "l", cat: "tej", done: false, ex: true },
+      { id: 2, name: "Tojás", qty: 10, unit: "db", cat: "tej", done: false, ex: true },
+      { id: 3, name: "Kenyér", qty: 1, unit: "db", cat: "pek", done: true, ex: true },
+      { id: 4, name: "Kaliforniai paprika", qty: 5, unit: "db", cat: "zold", done: false, ex: true },
+      { id: 5, name: "Csirkemell", qty: 1, unit: "kg", cat: "hus", done: false, ex: true },
+      { id: 6, name: "Vécépapír", qty: 1, unit: "csomag", cat: "haz", done: false, ex: true }
+    ] };
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function guessCat(name) {
+    var n = name.toLowerCase();
+    for (var i = 0; i < CATS.length; i++) {
+      var list = KEYS[CATS[i][0]] || [];
+      for (var j = 0; j < list.length; j++) {
+        if (n.indexOf(list[j]) !== -1) return CATS[i][0];
+      }
+    }
+    return "egyeb";
+  }
+
+  function fmtQty(q) {
+    var n = Number(q);
+    if (!isFinite(n)) return "";
+    return String(Math.round(n * 100) / 100).replace(".", ",");
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  var CHECK = '<svg viewBox="0 0 14 14" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>';
+  var TRASH = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4h4v2M6 6l.7 10h6.6L14 6"/></svg>';
+
+  function render() {
+    var list = $("list");
+    list.textContent = "";
+    var total = state.items.length;
+    var done = state.items.filter(function (i) { return i.done; }).length;
+
+    $("fill").style.width = total ? (done / total * 100) + "%" : "0%";
+    $("count").textContent = total
+      ? done + " / " + total + " megvéve"
+      : "Még nincs tétel a listán";
+    $("clearDone").hidden = done === 0;
+    $("hint").hidden = !state.items.some(function (i) { return i.ex; });
+
+    if (!total) {
+      list.appendChild(el("div", "empty", "Üres a lista. Írd be fent, mi kell a boltból."));
+      return;
+    }
+
+    CATS.forEach(function (c) {
+      var items = state.items.filter(function (i) { return i.cat === c[0]; });
+      if (!items.length) return;
+      items.sort(function (a, b) { return Number(a.done) - Number(b.done); });
+
+      var g = el("section", "group");
+      var h = el("h2");
+      h.appendChild(el("span", null, c[1]));
+      h.appendChild(el("span", null, String(items.length)));
+      g.appendChild(h);
+
+      var ul = el("ul");
+      items.forEach(function (it) {
+        var li = el("li", it.done ? "done" : "");
+        var cb = el("button", "check");
+        cb.type = "button";
+        cb.setAttribute("role", "checkbox");
+        cb.setAttribute("aria-checked", it.done ? "true" : "false");
+        cb.setAttribute("aria-label", it.name + " megvéve");
+        var box = el("span", "box");
+        box.innerHTML = CHECK;
+        cb.appendChild(box);
+        cb.addEventListener("click", function () {
+          it.done = !it.done; save(); render();
+        });
+
+        var label = el("span", "label", it.name);
+        var q = el("span", "qty", fmtQty(it.qty) + " " + it.unit);
+
+        var del = el("button", "del");
+        del.type = "button";
+        del.setAttribute("aria-label", it.name + " törlése");
+        del.innerHTML = TRASH;
+        del.addEventListener("click", function () {
+          state.items = state.items.filter(function (x) { return x.id !== it.id; });
+          save(); render();
+        });
+
+        li.appendChild(cb); li.appendChild(label); li.appendChild(q); li.appendChild(del);
+        ul.appendChild(li);
+      });
+      g.appendChild(ul);
+      list.appendChild(g);
+    });
+  }
+
+  function init() {
+    // Kategória választó
+    var sel = $("cat");
+    var auto = document.createElement("option");
+    auto.value = "auto"; auto.textContent = "Kategória: automatikus";
+    sel.appendChild(auto);
+    CATS.forEach(function (c) {
+      var o = document.createElement("option");
+      o.value = c[0]; o.textContent = c[1];
+      sel.appendChild(o);
+    });
+
+    var d = new Date();
+    $("date").textContent = d.toLocaleDateString("hu-HU", { weekday: "long", month: "long", day: "numeric" });
+
+    load();
+
+    $("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var name = $("name").value.trim();
+      if (!name) { $("name").focus(); return; }
+      var qty = parseFloat($("qty").value.replace(",", "."));
+      if (!isFinite(qty) || qty <= 0) qty = 1;
+      var cat = $("cat").value === "auto" ? guessCat(name) : $("cat").value;
+      var name1 = name.charAt(0).toUpperCase() + name.slice(1);
+      state.items.push({ id: Date.now() + Math.random(), name: name1, qty: qty, unit: $("unit").value, cat: cat, done: false });
+      save(); render();
+      $("name").value = "";
+      $("qty").value = "1";
+      $("name").focus();
+    });
+
+    $("clearDone").addEventListener("click", function () {
+      state.items = state.items.filter(function (i) { return !i.done; });
+      save(); render();
+    });
+    $("clearSamples").addEventListener("click", function () {
+      state.items = state.items.filter(function (i) { return !i.ex; });
+      save(); render();
+    });
+
+    render();
+  }
+  init();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
